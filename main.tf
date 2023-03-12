@@ -244,7 +244,7 @@ resource "azurerm_virtual_machine_extension" "web_server_install" {
 
   settings = <<SETTINGS
     {
-      "commandToExecute": "powershell Invoke-WebRequest -Uri "https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1" -OutFile ".\ConfigureRemotingForAnsible.ps1"; powershell -ExecutionPolicy Unrestricted -File .\ConfigureRemotingForAnsible.ps1"
+      "commandToExecute": "powershell Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1' -OutFile 'ConfigureRemotingForAnsible.ps1'; powershell -ExecutionPolicy Unrestricted -File ConfigureRemotingForAnsible.ps1"
     }
   SETTINGS
 }
