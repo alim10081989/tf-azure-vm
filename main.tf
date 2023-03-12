@@ -235,7 +235,7 @@ resource "azurerm_windows_virtual_machine" "demo_windows_vm" {
 
 ## Enable Powershell Remoting for ansible to connect on 5986
 resource "azurerm_virtual_machine_extension" "web_server_install" {
-  name                       = "${random_pet.prefix.id}-wsi"
+  name                       = "${random_pet.rg_name.id}-wsi"
   virtual_machine_id         = azurerm_windows_virtual_machine.demo_windows_vm.id
   publisher                  = "Microsoft.Compute"
   type                       = "CustomScriptExtension"
