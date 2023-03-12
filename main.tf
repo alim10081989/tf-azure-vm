@@ -8,7 +8,7 @@ resource "azurerm_resource_group" "rg" {
 }
 
 # Create virtual network
-resource "azurerm_virtual_network" "demo_terraform_network" {
+resource "azurerm_virtual_network" "demo_virtual_network" {
   name                = "demoVnet"
   address_space       = ["10.0.0.0/16"]
   location            = azurerm_resource_group.rg.location
@@ -16,23 +16,31 @@ resource "azurerm_virtual_network" "demo_terraform_network" {
 }
 
 # Create subnet
-resource "azurerm_subnet" "demo_terraform_subnet" {
+resource "azurerm_subnet" "demo_vnet_subnet" {
   name                 = "demoSubnet"
   resource_group_name  = azurerm_resource_group.rg.name
-  virtual_network_name = azurerm_virtual_network.demo_terraform_network.name
+  virtual_network_name = azurerm_virtual_network.demo_virtual_network.name
   address_prefixes     = ["10.0.1.0/24"]
 }
 
 # Create public IPs
-resource "azurerm_public_ip" "demo_terraform_public_ip" {
-  name                = "demoPublicIP"
+resource "azurerm_public_ip" "demo_vnet_linux_public_ip" {
+  name                = "demoLinuxPublicIP"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  allocation_method   = "Dynamic"
+}
+
+# Create public IPs
+resource "azurerm_public_ip" "demo_vnet_win_public_ip" {
+  name                = "demoWinPublicIP"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   allocation_method   = "Dynamic"
 }
 
 # Create Network Security Group and rule
-resource "azurerm_network_security_group" "demo_terraform_nsg" {
+resource "azurerm_network_security_group" "demo_vnet_nsg" {
   name                = "demoNetworkSecurityGroup"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
@@ -80,30 +88,50 @@ resource "azurerm_network_security_group" "demo_terraform_nsg" {
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
-    destination_port_range     = "5985,5986"
+    destination_port_range     = "5985-5986"
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
 }
 
 # Create network interface
-resource "azurerm_network_interface" "demo_terraform_nic" {
-  name                = "demoNIC"
+resource "azurerm_network_interface" "linux_vm_nic" {
+  name                = "LinuxNIC"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 
   ip_configuration {
-    name                          = "demo_nic_configuration"
-    subnet_id                     = azurerm_subnet.demo_terraform_subnet.id
+    name                          = "linux_nic_config"
+    subnet_id                     = azurerm_subnet.demo_vnet_subnet.id
     private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.demo_terraform_public_ip.id
+    public_ip_address_id          = azurerm_public_ip.demo_vnet_linux_public_ip.id
+  }
+}
+
+# Create network interface
+resource "azurerm_network_interface" "win_vm_nic" {
+  name                = "WinNIC"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  ip_configuration {
+    name                          = "win_nic_config"
+    subnet_id                     = azurerm_subnet.demo_vnet_subnet.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.demo_vnet_win_public_ip.id
   }
 }
 
 # Connect the security group to the network interface
-resource "azurerm_network_interface_security_group_association" "example" {
-  network_interface_id      = azurerm_network_interface.demo_terraform_nic.id
-  network_security_group_id = azurerm_network_security_group.demo_terraform_nsg.id
+resource "azurerm_network_interface_security_group_association" "linux" {
+  network_interface_id      = azurerm_network_interface.linux_vm_nic.id
+  network_security_group_id = azurerm_network_security_group.demo_vnet_nsg.id
+}
+
+# Connect the security group to the network interface
+resource "azurerm_network_interface_security_group_association" "windows" {
+  network_interface_id      = azurerm_network_interface.win_vm_nic.id
+  network_security_group_id = azurerm_network_security_group.demo_vnet_nsg.id
 }
 
 # Generate random text for a unique storage account name
@@ -130,14 +158,14 @@ resource "azurerm_linux_virtual_machine" "demo_terraform_vm" {
   name                  = "linuxVM"
   location              = azurerm_resource_group.rg.location
   resource_group_name   = azurerm_resource_group.rg.name
-  network_interface_ids = [azurerm_network_interface.demo_terraform_nic.id]
+  network_interface_ids = [azurerm_network_interface.linux_vm_nic.id]
   size                  = "Standard_DS1_v2"
 
   tags = {
     Environment = "Dev"
     Owner       = "Alim"
     Team        = "FTDO"
-    OS          = "linux"
+    OS          = "Linux"
     Application = "Terraform"
     Purpose     = "Ansible"
     Type        = "VirtualMachine"
@@ -171,7 +199,7 @@ resource "azurerm_windows_virtual_machine" "demo_windows_vm" {
   location              = azurerm_resource_group.rg.location
   resource_group_name   = azurerm_resource_group.rg.name
   size                  = "Standard_DS1_v2"
-  network_interface_ids = [azurerm_network_interface.demo_terraform_nic.id]
+  network_interface_ids = [azurerm_network_interface.win_vm_nic.id]
 
   tags = {
     Environment = "Dev"
@@ -203,4 +231,20 @@ resource "azurerm_windows_virtual_machine" "demo_windows_vm" {
   boot_diagnostics {
     storage_account_uri = azurerm_storage_account.demo_storage_account.primary_blob_endpoint
   }
+}
+
+## Enable Powershell Remoting for ansible to connect on 5986
+resource "azurerm_virtual_machine_extension" "web_server_install" {
+  name                       = "${random_pet.prefix.id}-wsi"
+  virtual_machine_id         = azurerm_windows_virtual_machine.demo_windows_vm.id
+  publisher                  = "Microsoft.Compute"
+  type                       = "CustomScriptExtension"
+  type_handler_version       = "1.8"
+  auto_upgrade_minor_version = true
+
+  settings = <<SETTINGS
+    {
+      "commandToExecute": "powershell Invoke-WebRequest -Uri "https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1" -OutFile ".\ConfigureRemotingForAnsible.ps1"; powershell -ExecutionPolicy Unrestricted -File .\ConfigureRemotingForAnsible.ps1"
+    }
+  SETTINGS
 }
