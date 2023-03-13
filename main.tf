@@ -232,19 +232,3 @@ resource "azurerm_windows_virtual_machine" "demo_windows_vm" {
     storage_account_uri = azurerm_storage_account.demo_storage_account.primary_blob_endpoint
   }
 }
-
-## Enable Powershell Remoting for ansible to connect on 5986
-resource "azurerm_virtual_machine_extension" "web_server_install" {
-  name                       = "${random_pet.rg_name.id}-wsi"
-  virtual_machine_id         = azurerm_windows_virtual_machine.demo_windows_vm.id
-  publisher                  = "Microsoft.Compute"
-  type                       = "CustomScriptExtension"
-  type_handler_version       = "1.8"
-  auto_upgrade_minor_version = true
-
-  settings = <<SETTINGS
-    {
-      "commandToExecute": "powershell Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1' -OutFile 'ConfigureRemotingForAnsible.ps1'; powershell -ExecutionPolicy Unrestricted -File ConfigureRemotingForAnsible.ps1"
-    }
-  SETTINGS
-}
